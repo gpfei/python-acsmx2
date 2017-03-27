@@ -1,5 +1,5 @@
-# python-acsm2
-A Python wrapper of acsm2 from Snort
+# python-acsmx2
+A Python wrapper of acsm2 from [Snort](https://github.com/jasonish/snort)
 
 #### Requirements
 - Python 3.5 + (Earlier versions have not been tested.)
