@@ -1,39 +1,7 @@
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from libc.string cimport memcpy, memset, strlen
 
-
-cdef extern from 'acsmx2.h':
-    # 用于保存匹配词的字符串最大长度
-    enum: MAX_MATCHED_LENGTH
-
-    ctypedef struct ACSM_STRUCT2:
-        pass
-
-    ACSM_STRUCT2 * acsmNew2(void (*userfree)(void *p),
-                            void (*optiontreefree)(void **),
-                            void (*neg_list_free)(void **))
-
-    int acsmAddPattern2(ACSM_STRUCT2 *, unsigned char *, int, int, int, int, int, void *, int)
-
-    int acsmCompile2(ACSM_STRUCT2 *,
-                     int (*build_tree)(void * id, void **existing_tree),
-                     int (*neg_list_func)(void *id, void **list))
-
-    int acsmSearch2(ACSM_STRUCT2 * acsm,unsigned char * T, int n,
-                    int (*Match)(void * id, void *tree, int index, void *data, void *neg_list),
-                    void * data, int* current_state)
-
-    # 匹配所有单词，例如:
-    #   patterns: 'he' 'she'
-    #   T: 'she'
-    #   匹配结果: 'he', 'she'
-    int acsmSearchAll2 ( ACSM_STRUCT2 * acsm,unsigned char * T, int n,
-                      int (*Match)(void * id, void *tree, int index, void *data, void *neg_list),
-                      void * data, int* current_state );
-
-    void acsmFree2(ACSM_STRUCT2 * acsm)
-    int acsmPatternCount2(ACSM_STRUCT2 * acsm)
-    void acsmCompressStates(ACSM_STRUCT2 *, int)
+cimport _acsmx2
 
 
 cdef int match_found(void * _id, void *tree, int index, void *data, void *neg_list):
@@ -52,7 +20,7 @@ cdef int match_found(void * _id, void *tree, int index, void *data, void *neg_li
     cdef size_t offset = length
 
     # data = '<found_word_1>\n<found_word_2>' + '\n' + '<new_found_word>' + '\0\0...'
-    if offset + word_length + 1 <= MAX_MATCHED_LENGTH:
+    if offset + word_length + 1 <= _acsmx2.MAX_MATCHED_LENGTH:
         if offset > 0:
             _data[offset] = b'\n'
             offset += 1
@@ -64,18 +32,18 @@ cdef int match_found(void * _id, void *tree, int index, void *data, void *neg_li
 
 cdef class Matcher:
 
-    cdef ACSM_STRUCT2 *acsm
-    cdef unsigned char matched_words[MAX_MATCHED_LENGTH + 1]
+    cdef _acsmx2.ACSM_STRUCT2 *acsm
+    cdef unsigned char matched_words[_acsmx2.MAX_MATCHED_LENGTH + 1]
 
     def __cinit__(self):
-        self.acsm = acsmNew2(PyMem_Free, NULL, NULL)
+        self.acsm = _acsmx2.acsmNew2(PyMem_Free, NULL, NULL)
         if not self.acsm:
             raise MemoryError()
         # 压缩状态
-        acsmCompressStates(self.acsm, 1)
+        _acsmx2.acsmCompressStates(self.acsm, 1)
 
     def pattern_count(self):
-        return acsmPatternCount2(self.acsm)
+        return _acsmx2.acsmPatternCount2(self.acsm)
 
     def add_pattern(self, bytes pattern, int iid):
         cdef size_t length = len(pattern)
@@ -84,22 +52,35 @@ cdef class Matcher:
             raise MemoryError()
         memcpy(_pattern, <unsigned char *>pattern, length)
         _pattern[length] = '\0'
-        acsmAddPattern2(self.acsm, _pattern, length, 1, 0, 0, 0, <void *>_pattern, iid)
+        _acsmx2.acsmAddPattern2(
+            self.acsm, _pattern, length, 1, 0, 0, 0, <void *>_pattern, iid)
 
     def compile(self):
-        acsmCompile2(self.acsm, NULL, NULL)
+        _acsmx2.acsmCompile2(self.acsm, NULL, NULL)
 
     def search(self, bytes text):
         cdef size_t length = len(text)
         cdef unsigned char* _text = text
         cdef int start_state = 0
 
-        memset(self.matched_words, 0, MAX_MATCHED_LENGTH * sizeof(unsigned char))
-        count = acsmSearchAll2(self.acsm, _text, length, match_found,
-                               <void *>self.matched_words, &start_state)
+        memset(self.matched_words, 0, _acsmx2.MAX_MATCHED_LENGTH * sizeof(unsigned char))
+        count = _acsmx2.acsmSearch2(
+            self.acsm, _text, length, match_found,
+            <void *>self.matched_words, &start_state)
+        return count, <bytes>self.matched_words
+
+    def search_all(self, bytes text):
+        cdef size_t length = len(text)
+        cdef unsigned char* _text = text
+        cdef int start_state = 0
+
+        memset(self.matched_words, 0, _acsmx2.MAX_MATCHED_LENGTH * sizeof(unsigned char))
+        count = _acsmx2.acsmSearchAll2(
+            self.acsm, _text, length, match_found,
+            <void *>self.matched_words, &start_state)
         return count, <bytes>self.matched_words
 
     def __dealloc__(self):
         if self.acsm:
-            acsmFree2(self.acsm)
+            _acsmx2.acsmFree2(self.acsm)
 
