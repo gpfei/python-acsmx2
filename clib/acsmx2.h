@@ -39,7 +39,6 @@
 *   DEFINES and Typedef's
 */
 #define MAX_ALPHABET_SIZE 256
-#define MAX_MATCHED_LENGTH 10239
 
 /*
    FAIL STATE for 1,2,or 4 bytes for state transitions

@@ -1,7 +1,4 @@
 cdef extern from 'acsmx2.h':
-    # 用于保存匹配词的字符串最大长度
-    enum: MAX_MATCHED_LENGTH
-
     ctypedef struct ACSM_STRUCT2:
         pass
 
@@ -9,7 +6,7 @@ cdef extern from 'acsmx2.h':
                             void (*optiontreefree)(void **),
                             void (*neg_list_free)(void **))
 
-    int acsmAddPattern2(ACSM_STRUCT2 *, unsigned char *, int, int, int, int, int, void *, int)
+    int acsmAddPattern2(ACSM_STRUCT2 *, unsigned char *, int, int, int, int, int, void * _id, int iid)
 
     int acsmCompile2(ACSM_STRUCT2 *,
                      int (*build_tree)(void * id, void **existing_tree),

@@ -11,7 +11,7 @@ A Python wrapper of acsm2 from [Snort](https://github.com/jasonish/snort)
 ```python
 
 >>> from acsmx2 import Matcher
->>> m = Matcher()
+>>> m = Matcher(1000) # 1000 is size of the string which stores matched words
 >>> m.add_pattern(b'hello', 1)
 >>> m.add_pattern(b'world', 2)
 >>> m.compile()
@@ -25,4 +25,3 @@ A Python wrapper of acsm2 from [Snort](https://github.com/jasonish/snort)
 
 ##### Note
 - params of `add_pattern` and `search` must be type of `bytes`.
-- Macro `MAX_MATCHED_LENGTH` in `acsmx2.h` defines the max length of the string which stores all matched words, seperating with '\n'.
