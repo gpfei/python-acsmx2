@@ -5,21 +5,24 @@ cimport _acsmx2
 
 
 ctypedef struct MatchedWords:
-    size_t size
+    size_t capacity
+    size_t length
     unsigned char *data
 
 
-cdef MatchedWords* new_matched_words(size_t size):
+cdef MatchedWords* new_matched_words(size_t capacity):
     cdef MatchedWords * matched_words = <MatchedWords *>PyMem_Malloc(sizeof(MatchedWords))
-    matched_words.size = size
-    matched_words.data = <unsigned char *>PyMem_Malloc(size * sizeof(unsigned char))
+    matched_words.capacity = capacity
+    matched_words.length = 0
+    matched_words.data = <unsigned char *>PyMem_Malloc(capacity * sizeof(unsigned char))
     if not matched_words.data:
         raise MemoryError()
     return matched_words
 
 
 cdef void reset_matched_words(MatchedWords* matched_words):
-    memset(matched_words.data, 0, matched_words.size * sizeof(unsigned char))
+    matched_words.length = 0
+    memset(matched_words.data, 0, matched_words.capacity * sizeof(unsigned char))
 
 
 cdef void free_matched_words(MatchedWords* matched_words):
@@ -41,18 +44,20 @@ cdef int match_found(void * _id, void *tree, int index, void *matched_words, voi
     cdef unsigned char* word = <unsigned char*>_id
     cdef MatchedWords * _matched_words = <MatchedWords *>matched_words
     cdef unsigned char* _data = _matched_words.data
-    cdef size_t length = strlen(<char *>_data)
+    cdef size_t length = _matched_words.length
     cdef size_t word_length = strlen(<char *> word)
     cdef size_t offset = length
 
     # data = '<found_word_1>\n<found_word_2>' + '\n' + '<new_found_word>' + '\0\0...'
     if offset == 0:
-        if word_length < _matched_words.size:
+        if word_length < _matched_words.capacity:
             memcpy(_data + offset, word, word_length)
-    elif offset + word_length + 1 < _matched_words.size:
+            _matched_words.length += word_length
+    elif offset + word_length + 1 < _matched_words.capacity:
         _data[offset] = b'\n'
         offset += 1
         memcpy(_data + offset, word, word_length)
+        _matched_words.length += word_length + 1
 
     # if return value > 0, the search will stop when one match is found
     return 0
@@ -63,15 +68,15 @@ cdef class Matcher:
     cdef _acsmx2.ACSM_STRUCT2 *acsm
     cdef MatchedWords* matched_words
 
-    def __cinit__(self, size=1024):
+    def __cinit__(self, capacity=1024):
         """
-        :param size: max size of the string which stores matched words, seperated by `\n`
+        :param capacity: max capacity of the string which stores matched words, seperated by `\n`
 
         """
         self.acsm = _acsmx2.acsmNew2(PyMem_Free, NULL, NULL)
         if not self.acsm:
             raise MemoryError()
-        self.matched_words = new_matched_words(size)
+        self.matched_words = new_matched_words(capacity)
         _acsmx2.acsmCompressStates(self.acsm, 1)
 
     def pattern_count(self):
@@ -90,27 +95,27 @@ cdef class Matcher:
     def compile(self):
         _acsmx2.acsmCompile2(self.acsm, NULL, NULL)
 
-    def search(self, bytes text):
+    cdef _search(self, bytes text, bint full_search):
         cdef size_t length = len(text)
         cdef unsigned char* _text = text
         cdef int start_state = 0
 
         reset_matched_words(self.matched_words)
-        count = _acsmx2.acsmSearch2(
-            self.acsm, _text, length, match_found,
-            <void *>self.matched_words, &start_state)
-        return count, <bytes>self.matched_words.data
+        if full_search:
+            count = _acsmx2.acsmSearchAll2(
+                self.acsm, _text, length, match_found,
+                <void *>self.matched_words, &start_state)
+        else:
+            count = _acsmx2.acsmSearch2(
+                self.acsm, _text, length, match_found,
+                <void *>self.matched_words, &start_state)
+        return count, self.matched_words.data[:self.matched_words.length]
+
+    def search(self, bytes text):
+        return self._search(text, False)
 
     def search_all(self, bytes text):
-        cdef size_t length = len(text)
-        cdef unsigned char* _text = text
-        cdef int start_state = 0
-
-        reset_matched_words(self.matched_words)
-        count = _acsmx2.acsmSearchAll2(
-            self.acsm, _text, length, match_found,
-            <void *>self.matched_words, &start_state)
-        return count, <bytes>self.matched_words.data
+        return self._search(text, True)
 
     def __dealloc__(self):
         if self.acsm:
