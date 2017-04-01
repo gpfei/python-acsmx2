@@ -67,6 +67,7 @@ cdef class Matcher:
 
     cdef _acsmx2.ACSM_STRUCT2 *acsm
     cdef MatchedWords* matched_words
+    cdef int current_iid
 
     def __cinit__(self, capacity=1024):
         """
@@ -77,12 +78,19 @@ cdef class Matcher:
         if not self.acsm:
             raise MemoryError()
         self.matched_words = new_matched_words(capacity)
+        self.current_iid = 0
         _acsmx2.acsmCompressStates(self.acsm, 1)
 
     def pattern_count(self):
         return _acsmx2.acsmPatternCount2(self.acsm)
 
-    def add_pattern(self, bytes pattern, int iid):
+    def add_pattern(self, bytes pattern, int iid=0):
+        if iid == 0:
+            iid = self.current_iid
+            self.current_iid += 1
+        else:
+            self.current_iid = iid
+
         cdef size_t length = len(pattern)
         cdef unsigned char* _pattern = <unsigned char*>PyMem_Malloc((length + 1) * sizeof(unsigned char))
         if not _pattern:
