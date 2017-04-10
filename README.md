@@ -1,6 +1,9 @@
 # python-acsmx2
 A Python wrapper of acsm2 from [Snort](https://github.com/jasonish/snort)
 
+##### Warnings
+- Not thread-safe.
+
 #### Requirements
 - Python 3.5 + (Earlier versions have not been tested.)
 - Cython
@@ -23,5 +26,5 @@ A Python wrapper of acsm2 from [Snort](https://github.com/jasonish/snort)
 
 ```
 
-##### Note
+##### Notes
 - params of `add_pattern` and `search` must be type of `bytes`.
