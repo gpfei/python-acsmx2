@@ -1,5 +1,5 @@
 # python-acsmx2
-A Python wrapper of acsm2 from [Snort](https://github.com/jasonish/snort)
+A Python wrapper of acsmx2 from [Snort](https://github.com/jasonish/snort)
 
 ##### Warnings
 - Not thread-safe.
