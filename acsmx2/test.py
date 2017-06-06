@@ -1,6 +1,6 @@
 import unittest
 
-from acsmx2.search import Matcher
+from acsmx2.search import Matcher, MatchedWord
 
 
 class MatchTestCase(unittest.TestCase):
@@ -21,12 +21,26 @@ class MatchTestCase(unittest.TestCase):
         '''
 
         count, words = self.matcher.search(text)
-        self.assertEqual(count, 4)
-        self.assertEqual(words, b'hello\nld\nhello\nld')
+        self.assertEqual(len(words), 4)
+        self.assertEqual(len(words), count)
+        self.assertListEqual(words, [
+            MatchedWord(23, b'hello'),
+            MatchedWord(32, b'ld'),
+            MatchedWord(61, b'hello'),
+            MatchedWord(71, b'ld'),
+        ])
 
         count, words = self.matcher.search_all(text)
-        self.assertEqual(count, 6)
-        self.assertEqual(words, b'hello\nld\nworld\nhello\nld\nworld')
+        self.assertEqual(len(words), 6)
+        self.assertEqual(len(words), count)
+        self.assertListEqual(words, [
+            MatchedWord(23, b'hello'),
+            MatchedWord(32, b'ld'),
+            MatchedWord(29, b'world'),
+            MatchedWord(61, b'hello'),
+            MatchedWord(71, b'ld'),
+            MatchedWord(68, b'world'),
+        ])
 
     def test_chinese(self):
         for i, pattern in enumerate([
@@ -39,17 +53,26 @@ class MatchTestCase(unittest.TestCase):
         text = u'''我来到北京大学校门口'''.encode()
 
         count, words = self.matcher.search(text)
-        self.assertEqual(count, 2)
-        self.assertEqual(words, u'北京\n大学'.encode())
+        self.assertEqual(len(words), 2)
+        self.assertEqual(len(words), count)
+        self.assertListEqual(words, [
+            MatchedWord(9, '北京'.encode()),
+            MatchedWord(15, '大学'.encode()),
+        ])
 
         count, words = self.matcher.search_all(text)
-        self.assertEqual(count, 3)
-        self.assertEqual(words, u'北京\n大学\n北京大学'.encode())
+        self.assertEqual(len(words), 3)
+        self.assertEqual(len(words), count)
+        self.assertListEqual(words, [
+            MatchedWord(9, '北京'.encode()),
+            MatchedWord(15, '大学'.encode()),
+            MatchedWord(9, '北京大学'.encode()),
+        ])
 
 
 class MaxSizeTestCase(unittest.TestCase):
     def test_no_enough_length(self):
-        matcher = Matcher(8)
+        matcher = Matcher(10)
         for i, pattern in enumerate([
                 b'hello',
                 b'world',
@@ -60,10 +83,11 @@ class MaxSizeTestCase(unittest.TestCase):
 
         count, words = matcher.search(text)
         self.assertEqual(count, 2)
-        self.assertEqual(words, b'hello')
+        self.assertEqual(len(words), 1)
+        self.assertListEqual(words, [MatchedWord(10, b'hello')])
 
     def test_edge_case(self):
-        matcher = Matcher(5)
+        matcher = Matcher(8)
         for i, pattern in enumerate([
                 b'hello',
             ]):
@@ -72,10 +96,11 @@ class MaxSizeTestCase(unittest.TestCase):
         text = b'this is a hello-world-example.'
 
         count, words = matcher.search(text)
+        self.assertEqual(len(words), 0)
         self.assertEqual(count, 1)
-        self.assertEqual(words, b'')
+        self.assertListEqual(words, [])
 
-        matcher = Matcher(6)
+        matcher = Matcher(9)
         for i, pattern in enumerate([
                 b'hello',
             ]):
@@ -84,8 +109,9 @@ class MaxSizeTestCase(unittest.TestCase):
         text = b'this is a hello-world-example.'
 
         count, words = matcher.search(text)
+        self.assertEqual(len(words), 1)
         self.assertEqual(count, 1)
-        self.assertEqual(words, b'hello')
+        self.assertListEqual(words, [MatchedWord(10, b'hello')])
 
 
 if __name__ == '__main__':
