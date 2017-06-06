@@ -5,47 +5,47 @@ from libc.stdio cimport snprintf
 cimport _acsmx2
 
 
-ctypedef struct MatchedWords:
+ctypedef struct MatchedData:
     size_t capacity
     size_t length
     unsigned char *data
 
 
-cdef MatchedWords* new_matched_words(size_t capacity):
-    cdef MatchedWords * matched_words = <MatchedWords *>PyMem_Malloc(sizeof(MatchedWords))
-    matched_words.capacity = capacity
-    matched_words.length = 0
-    matched_words.data = <unsigned char *>PyMem_Malloc(capacity * sizeof(unsigned char))
-    if not matched_words.data:
+cdef MatchedData* new_matched_data(size_t capacity):
+    cdef MatchedData * matched_data = <MatchedData *>PyMem_Malloc(sizeof(MatchedData))
+    matched_data.capacity = capacity
+    matched_data.length = 0
+    matched_data.data = <unsigned char *>PyMem_Malloc(capacity * sizeof(unsigned char))
+    if not matched_data.data:
         raise MemoryError()
-    return matched_words
+    return matched_data
 
 
-cdef void reset_matched_words(MatchedWords* matched_words):
-    matched_words.length = 0
-    memset(matched_words.data, 0, matched_words.capacity * sizeof(unsigned char))
+cdef void reset_matched_data(MatchedData* matched_data):
+    matched_data.length = 0
+    memset(matched_data.data, 0, matched_data.capacity * sizeof(unsigned char))
 
 
-cdef void free_matched_words(MatchedWords* matched_words):
-    if matched_words and matched_words.data:
-        PyMem_Free(matched_words.data)
-        PyMem_Free(matched_words)
+cdef void free_matched_data(MatchedData* matched_data):
+    if matched_data and matched_data.data:
+        PyMem_Free(matched_data.data)
+        PyMem_Free(matched_data)
 
 
-cdef int match_found(void * _id, void *tree, int index, void *matched_words, void *neg_list):
+cdef int match_found(void * _id, void *tree, int index, void *matched_data, void *neg_list):
     """callback when one word is found
 
     :param _id: _id of acsmAddPattern2, which actually stores pattern here.
     :param tree: not used
     :param index: position of matched words
-    :param matched_words: used to store matched words
+    :param matched_data: used to store matched words
     :param neg_list: not used
 
     """
     cdef char* word = <char*>_id
-    cdef MatchedWords * _matched_words = <MatchedWords *>matched_words
-    cdef char* _data = <char *>_matched_words.data
-    cdef size_t offset = _matched_words.length
+    cdef MatchedData * _matched_data = <MatchedData *>matched_data
+    cdef char* _data = <char *>_matched_data.data
+    cdef size_t offset = _matched_data.length
     cdef char* _new_data = _data + offset
     cdef size_t word_length = strlen(word)
     cdef size_t min_number_size = 2  # size of string which stores number
@@ -54,18 +54,18 @@ cdef int match_found(void * _id, void *tree, int index, void *matched_words, voi
 
     # data = '<found_word_1>:index\n<found_word_2>:index' + '\n' + '<new_found_word>:index' + '\0\0...'
     if offset == 0:
-        if word_length + min_number_size < _matched_words.capacity:
-            new_size = min(word_length + max_number_size, _matched_words.capacity - offset)
+        if word_length + min_number_size < _matched_data.capacity:
+            new_size = min(word_length + max_number_size, _matched_data.capacity - offset)
             new_size = snprintf(_new_data, new_size, "%s:%d", word, index)
-    elif offset + word_length + min_number_size + 1 < _matched_words.capacity:
-        new_size = min(word_length + max_number_size + 1, _matched_words.capacity - offset)
+    elif offset + word_length + min_number_size + 1 < _matched_data.capacity:
+        new_size = min(word_length + max_number_size + 1, _matched_data.capacity - offset)
         new_size = snprintf(_new_data, new_size, "\n%s:%d", word, index)
 
-    if new_size > 0 and offset + new_size < _matched_words.capacity:
-        _matched_words.length += new_size
+    if new_size > 0 and offset + new_size < _matched_data.capacity:
+        _matched_data.length += new_size
     else:
         # ignore this match
-        memset(_new_data, 0, (_matched_words.capacity - offset) * sizeof(char))
+        memset(_new_data, 0, (_matched_data.capacity - offset) * sizeof(char))
 
     # if return value > 0, the search will stop when one match is found
     return 0
@@ -91,7 +91,7 @@ cdef class MatchedWord:
 cdef class Matcher:
 
     cdef _acsmx2.ACSM_STRUCT2 *acsm
-    cdef MatchedWords* matched_words
+    cdef MatchedData* matched_data
     cdef int current_iid
 
     def __cinit__(self, capacity=1024):
@@ -102,7 +102,7 @@ cdef class Matcher:
         self.acsm = _acsmx2.acsmNew2(PyMem_Free, NULL, NULL)
         if not self.acsm:
             raise MemoryError()
-        self.matched_words = new_matched_words(capacity)
+        self.matched_data = new_matched_data(capacity)
         self.current_iid = 0
         _acsmx2.acsmCompressStates(self.acsm, 1)
 
@@ -137,16 +137,16 @@ cdef class Matcher:
         cdef bytes word
         cdef list result = []
 
-        reset_matched_words(self.matched_words)
+        reset_matched_data(self.matched_data)
         if full_search:
             count = _acsmx2.acsmSearchAll2(
                 self.acsm, _text, length, match_found,
-                <void *>self.matched_words, &start_state)
+                <void *>self.matched_data, &start_state)
         else:
             count = _acsmx2.acsmSearch2(
                 self.acsm, _text, length, match_found,
-                <void *>self.matched_words, &start_state)
-        for matched in self.matched_words.data[:self.matched_words.length].split(b'\n'):
+                <void *>self.matched_data, &start_state)
+        for matched in self.matched_data.data[:self.matched_data.length].split(b'\n'):
             if not matched:
                 continue
             word, _index = matched.rsplit(b':', 1)
@@ -163,7 +163,7 @@ cdef class Matcher:
         if self.acsm:
             _acsmx2.acsmFree2(self.acsm)
             self.acsm = NULL
-        if self.matched_words:
-            free_matched_words(self.matched_words)
-            self.matched_words = NULL
+        if self.matched_data:
+            free_matched_data(self.matched_data)
+            self.matched_data = NULL
 
